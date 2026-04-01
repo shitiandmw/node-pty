@@ -209,3 +209,7 @@ declare module 'node-pty' {
     (listener: (e: T) => any): IDisposable;
   }
 }
+
+declare module '@shitiandmw/node-pty' {
+  export * from 'node-pty';
+}
