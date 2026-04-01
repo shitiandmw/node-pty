@@ -167,6 +167,9 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
         }
       }
     }
+    if (kq != -1) {
+      close(kq);
+    }
 #else
     while (true) {
       errno = 0;
@@ -715,7 +718,7 @@ pty_posix_spawn(char** argv, char** env,
   }
 
   // Use TIOCPTYGNAME instead of ptsname() to avoid threading problems.
-  int slave;
+  int slave = -1;
   char slave_pty_name[128];
   res = ioctl(*master, TIOCPTYGNAME, slave_pty_name);
   if (res == -1) {
@@ -777,9 +780,13 @@ pty_posix_spawn(char** argv, char** env,
 done:
   posix_spawn_file_actions_destroy(&acts);
   posix_spawnattr_destroy(&attrs);
+  if (slave != -1) {
+    close(slave);
+  }
 
-  for (; count > 0; count--) {
-    close(low_fds[count]);
+  size_t low_fd_count = count < 3 ? count + 1 : 3;
+  for (size_t i = 0; i < low_fd_count; i++) {
+    close(low_fds[i]);
   }
 }
 #endif

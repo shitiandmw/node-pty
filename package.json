@@ -1,16 +1,16 @@
 {
-  "name": "node-pty",
+  "name": "@shitian/node-pty",
   "description": "Fork pseudoterminals in Node.JS",
   "author": {
     "name": "Microsoft Corporation"
   },
-  "version": "1.1.0",
+  "version": "1.1.0-shitian.0",
   "license": "MIT",
   "main": "./lib/index.js",
   "types": "./typings/node-pty.d.ts",
   "repository": {
     "type": "git",
-    "url": "git://github.com/microsoft/node-pty.git"
+    "url": "https://github.com/shitiandmw/node-pty.git"
   },
   "files": [
     "binding.gyp",
@@ -22,9 +22,9 @@
     "third_party/",
     "typings/"
   ],
-  "homepage": "https://github.com/microsoft/node-pty",
+  "homepage": "https://github.com/shitiandmw/node-pty",
   "bugs": {
-    "url": "https://github.com/microsoft/node-pty/issues"
+    "url": "https://github.com/shitiandmw/node-pty/issues"
   },
   "keywords": [
     "pty",
@@ -41,10 +41,14 @@
     "install": "node scripts/prebuild.js || node-gyp rebuild",
     "postinstall": "node scripts/post-install.js",
     "compileCommands": "node scripts/gen-compile-commands.js",
+    "verify:darwin-fd-leak": "node scripts/verify-darwin-fd-leak.js",
     "test": "cross-env NODE_ENV=test mocha -R spec --exit lib/*.test.js",
     "posttest": "npm run lint",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "node-addon-api": "^7.1.0"
