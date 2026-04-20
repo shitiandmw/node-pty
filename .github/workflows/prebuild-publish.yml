@@ -1,0 +1,134 @@
+name: Prebuild & Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to npm'
+        type: boolean
+        default: false
+
+jobs:
+  prebuild:
+    name: Prebuild (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: darwin-arm64
+          - os: macos-13
+            artifact: darwin-x64
+          - os: ubuntu-22.04
+            artifact: linux-x64
+          - os: ubuntu-22.04-arm
+            artifact: linux-arm64
+          - os: windows-2022
+            artifact: win32-x64
+          - os: windows-11-arm
+            artifact: win32-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Install and build
+        run: npm ci
+
+      - name: Collect prebuild artifacts
+        shell: bash
+        run: |
+          mkdir -p prebuilds/${{ matrix.artifact }}
+          cp build/Release/*.node prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
+
+          # macOS spawn-helper
+          if [ -f build/Release/spawn-helper ]; then
+            cp build/Release/spawn-helper prebuilds/${{ matrix.artifact }}/
+          fi
+
+          # Windows: winpty-agent.exe, winpty.dll
+          cp build/Release/*.exe prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
+          cp build/Release/*.dll prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
+          cp build/Release/*.pdb prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
+
+          # Windows: conpty DLL + OpenConsole.exe from third_party
+          ARCH="${{ matrix.artifact }}"
+          WIN_ARCH="${ARCH#win32-}"
+          CONPTY_DIR=$(ls -d third_party/conpty/*/win10-${WIN_ARCH} 2>/dev/null | head -1)
+          if [ -d "$CONPTY_DIR" ]; then
+            mkdir -p prebuilds/${{ matrix.artifact }}/conpty
+            cp "$CONPTY_DIR"/* prebuilds/${{ matrix.artifact }}/conpty/
+          fi
+
+          echo "=== Prebuild contents ==="
+          ls -lR prebuilds/${{ matrix.artifact }}/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuild-${{ matrix.artifact }}
+          path: prebuilds/${{ matrix.artifact }}
+
+  publish:
+    name: Publish to npm
+    needs: prebuild
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies (skip native build)
+        run: npm ci --ignore-scripts
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Download all prebuild artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: prebuilds
+          pattern: prebuild-*
+          merge-multiple: false
+
+      - name: Assemble prebuilds directory
+        run: |
+          rm -rf final-prebuilds
+          mkdir -p final-prebuilds
+
+          for dir in prebuilds/prebuild-*/; do
+            platform_arch=$(basename "$dir" | sed 's/^prebuild-//')
+            cp -r "$dir" "final-prebuilds/$platform_arch"
+          done
+
+          rm -rf prebuilds
+          mv final-prebuilds prebuilds
+
+          echo "=== Final prebuilds structure ==="
+          find prebuilds -type f | sort
+
+      - name: Verify prebuilds
+        run: |
+          for platform in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64 win32-arm64; do
+            if [ ! -d "prebuilds/$platform" ]; then
+              echo "ERROR: Missing prebuilds/$platform"
+              exit 1
+            fi
+            echo "OK: prebuilds/$platform"
+            ls -la "prebuilds/$platform/"
+          done
+
+      - name: Dry run - pack and inspect
+        run: |
+          npm pack --dry-run 2>&1 | grep -E "prebuilds/|Tarball|Total"
+
+      - name: Publish
+        if: inputs.publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
