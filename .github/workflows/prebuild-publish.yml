@@ -49,10 +49,9 @@ jobs:
             cp build/Release/spawn-helper prebuilds/${{ matrix.artifact }}/
           fi
 
-          # Windows: winpty-agent.exe, winpty.dll
+          # Windows: winpty-agent.exe, winpty.dll (exclude .pdb debug symbols)
           cp build/Release/*.exe prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
           cp build/Release/*.dll prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
-          cp build/Release/*.pdb prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
 
           # Windows: conpty DLL + OpenConsole.exe from third_party
           ARCH="${{ matrix.artifact }}"
