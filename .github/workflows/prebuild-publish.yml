@@ -41,29 +41,48 @@ jobs:
       - name: Collect prebuild artifacts
         shell: bash
         run: |
-          mkdir -p prebuilds/${{ matrix.artifact }}
-          cp build/Release/*.node prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
+          set +e
+          DEST="prebuilds/${{ matrix.artifact }}"
+          mkdir -p "$DEST"
+
+          echo "=== build/Release contents ==="
+          ls -la build/Release/ || echo "(no build/Release directory)"
+
+          # Copy .node files
+          for f in build/Release/*.node; do
+            [ -f "$f" ] && cp "$f" "$DEST/"
+          done
 
           # macOS spawn-helper
-          if [ -f build/Release/spawn-helper ]; then
-            cp build/Release/spawn-helper prebuilds/${{ matrix.artifact }}/
-          fi
+          [ -f build/Release/spawn-helper ] && cp build/Release/spawn-helper "$DEST/"
 
           # Windows: winpty-agent.exe, winpty.dll (exclude .pdb debug symbols)
-          cp build/Release/*.exe prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
-          cp build/Release/*.dll prebuilds/${{ matrix.artifact }}/ 2>/dev/null || true
+          for f in build/Release/*.exe; do
+            [ -f "$f" ] && cp "$f" "$DEST/"
+          done
+          for f in build/Release/*.dll; do
+            [ -f "$f" ] && cp "$f" "$DEST/"
+          done
 
           # Windows: conpty DLL + OpenConsole.exe from third_party
           ARCH="${{ matrix.artifact }}"
           WIN_ARCH="${ARCH#win32-}"
           CONPTY_DIR=$(ls -d third_party/conpty/*/win10-${WIN_ARCH} 2>/dev/null | head -1)
           if [ -d "$CONPTY_DIR" ]; then
-            mkdir -p prebuilds/${{ matrix.artifact }}/conpty
-            cp "$CONPTY_DIR"/* prebuilds/${{ matrix.artifact }}/conpty/
+            mkdir -p "$DEST/conpty"
+            cp "$CONPTY_DIR"/* "$DEST/conpty/"
           fi
 
           echo "=== Prebuild contents ==="
-          ls -lR prebuilds/${{ matrix.artifact }}/
+          ls -lR "$DEST/"
+
+          # Verify at least one .node file was collected
+          NODE_COUNT=$(find "$DEST" -name "*.node" | wc -l)
+          if [ "$NODE_COUNT" -eq 0 ]; then
+            echo "ERROR: No .node files found in prebuild output!"
+            exit 1
+          fi
+          echo "OK: Found $NODE_COUNT .node file(s)"
 
       - uses: actions/upload-artifact@v4
         with:
